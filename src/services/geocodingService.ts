@@ -20,7 +20,7 @@ async function nominatimSearch(query: string): Promise<GeocodingResult | null> {
   });
 
   const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-    headers: { 'User-Agent': 'SummitScheduler/1.0' },
+    headers: { 'User-Agent': 'NewParadigmProjects/1.0' },
   });
 
   const data = await response.json();

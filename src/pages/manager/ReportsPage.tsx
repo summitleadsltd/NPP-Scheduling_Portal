@@ -5,7 +5,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Clock, Users, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, differenceInMinutes, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
-import { formatEST } from '@/lib/timezone';
+import { formatEST, toEST } from '@/lib/timezone';
 import { Progress } from '@/components/ui/progress';
 import type { Appointment, User } from '@/types/database';
 
@@ -17,7 +17,7 @@ export function ReportsPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const now = new Date();
+        const now = toEST(new Date());
         const [appts, techs] = await Promise.all([
           getAppointments({
             start_date: startOfMonth(now).toISOString(),
@@ -67,7 +67,7 @@ export function ReportsPage() {
   }).sort((a, b) => b.total - a.total);
 
   // Appointments per day this week
-  const now = new Date();
+  const now = toEST(new Date());
   const weekDays = eachDayOfInterval({
     start: startOfWeek(now),
     end: endOfWeek(now),

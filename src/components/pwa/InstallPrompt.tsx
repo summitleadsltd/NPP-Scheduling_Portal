@@ -18,7 +18,7 @@ export function InstallPrompt() {
           <div className="flex items-start gap-3">
             <Share className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-medium">Install Summit Scheduler</p>
+              <p className="text-sm font-medium">Install NPP</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Tap Share <Share className="h-3 w-3 inline" /> then "Add to Home Screen"
               </p>
@@ -48,7 +48,7 @@ export function InstallPrompt() {
         <div className="flex items-center gap-3">
           <Download className="h-5 w-5 text-primary shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-medium">Install Summit Scheduler</p>
+            <p className="text-sm font-medium">Install NPP</p>
             <p className="text-xs text-muted-foreground mt-1">Add to your home screen for quick access</p>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.summitscheduler.app',
-  appName: 'Summit Scheduler',
+  appId: 'com.newparadigmprojects.app',
+  appName: 'New Paradigm Projects',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

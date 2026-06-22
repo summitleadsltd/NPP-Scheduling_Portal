@@ -14,7 +14,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'Summit Scheduler';
+  const title = payload.notification?.title || 'New Paradigm Projects';
   const options = {
     body: payload.notification?.body || '',
     icon: '/icons/icon-192x192.png',

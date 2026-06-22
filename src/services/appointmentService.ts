@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { toEST } from '@/lib/timezone';
 import type { Appointment, AppointmentStatus } from '@/types/database';
 
 export async function getAppointments(filters?: {
@@ -140,7 +141,7 @@ export async function deleteAppointment(id: string) {
 }
 
 export async function getTodayAppointments(technicianId?: string) {
-  const today = new Date();
+  const today = toEST(new Date());
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -153,7 +154,7 @@ export async function getTodayAppointments(technicianId?: string) {
 }
 
 export async function getWeekAppointments(technicianId?: string) {
-  const today = new Date();
+  const today = toEST(new Date());
   today.setHours(0, 0, 0, 0);
   const weekEnd = new Date(today);
   weekEnd.setDate(weekEnd.getDate() + 7);

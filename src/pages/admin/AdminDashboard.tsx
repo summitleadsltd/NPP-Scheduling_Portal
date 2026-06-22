@@ -5,6 +5,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Users, TrendingUp, BarChart3, Shield, UserPlus } from 'lucide-react';
 import { startOfMonth, endOfMonth } from 'date-fns';
+import { toEST } from '@/lib/timezone';
 import type { Appointment, User } from '@/types/database';
 
 export function AdminDashboard() {
@@ -17,7 +18,7 @@ export function AdminDashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const now = new Date();
+        const now = toEST(new Date());
         const [users, today, week, month] = await Promise.all([
           getUsers(),
           getTodayAppointments(),

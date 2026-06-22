@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -54,11 +54,8 @@ export function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            <div className="h-12 w-12 rounded-lg bg-primary flex items-center justify-center mx-auto">
-              <span className="text-xl font-bold text-white">S</span>
-            </div>
+            <img src="/npp-logo.png" alt="New Paradigm Projects" className="h-12 w-auto mx-auto" />
           </div>
-          <CardTitle className="text-2xl">Summit Scheduler</CardTitle>
           <p className="text-sm text-muted-foreground">
             Intelligent Field Service Dispatch
           </p>

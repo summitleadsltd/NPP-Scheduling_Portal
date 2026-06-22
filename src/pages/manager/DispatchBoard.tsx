@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppointmentStatusBadge } from '@/components/shared/AppointmentStatusBadge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { startOfDay, addDays } from 'date-fns';
-import { formatEST } from '@/lib/timezone';
+import { formatEST, toEST } from '@/lib/timezone';
 import type { Appointment, User } from '@/types/database';
 import { toast } from 'sonner';
 
@@ -17,7 +17,7 @@ export function DispatchBoard() {
 
   const load = useCallback(async () => {
     try {
-      const today = startOfDay(new Date());
+      const today = startOfDay(toEST(new Date()));
       const [appts, techs] = await Promise.all([
         getAppointments({
           start_date: today.toISOString(),

@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'favicon-32x32.png', 'favicon-16x16.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Summit Scheduler',
-        short_name: 'Summit',
+        name: 'New Paradigm Projects',
+        short_name: 'NPP',
         description: 'Intelligent field service scheduling and dispatch platform.',
         theme_color: '#ffffff',
         background_color: '#ffffff',

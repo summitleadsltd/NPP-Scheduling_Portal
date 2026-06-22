@@ -77,7 +77,7 @@ export function Sidebar() {
   const navContent = (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b">
-        <h1 className="text-xl font-bold text-primary">Summit Scheduler</h1>
+        <img src="/npp-logo.png" alt="New Paradigm Projects" className="h-10 w-auto" />
         <p className="text-xs text-muted-foreground mt-1 capitalize">{profile?.role} Portal</p>
       </div>
 
