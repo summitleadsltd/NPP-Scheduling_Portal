@@ -40,6 +40,7 @@ import { UserManagement } from '@/pages/admin/UserManagement';
 
 // Shared
 import { NotificationCenter } from '@/pages/shared/NotificationCenter';
+import { AccountSettings } from '@/pages/shared/AccountSettings';
 
 function AppRoutes() {
   const { profile } = useAuthStore();
@@ -71,6 +72,7 @@ function AppRoutes() {
         <Route path="/technician/route" element={<TechnicianRouteMap />} />
         <Route path="/technician/availability" element={<TechnicianAvailability />} />
         <Route path="/technician/notifications" element={<NotificationCenter />} />
+        <Route path="/technician/account" element={<AccountSettings />} />
       </Route>
 
       {/* Scheduler Portal */}
@@ -86,6 +88,7 @@ function AppRoutes() {
         <Route path="/scheduler/calendar" element={<SchedulerCalendar />} />
         <Route path="/scheduler/customers" element={<CustomersPage />} />
         <Route path="/scheduler/notifications" element={<NotificationCenter />} />
+        <Route path="/scheduler/account" element={<AccountSettings />} />
       </Route>
 
       {/* Manager Portal */}
@@ -105,6 +108,7 @@ function AppRoutes() {
         <Route path="/manager/reports" element={<ReportsPage />} />
         <Route path="/manager/settings" element={<SettingsPage />} />
         <Route path="/manager/notifications" element={<NotificationCenter />} />
+        <Route path="/manager/account" element={<AccountSettings />} />
       </Route>
 
       {/* Admin Portal */}
@@ -123,6 +127,7 @@ function AppRoutes() {
         <Route path="/admin/reports" element={<ReportsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/notifications" element={<NotificationCenter />} />
+        <Route path="/admin/account" element={<AccountSettings />} />
       </Route>
 
       <Route path="*" element={<Navigate to={defaultRoute} replace />} />

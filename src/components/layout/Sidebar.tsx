@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const adminLinks = [
   { to: '/admin/customers', label: 'Customers', icon: BookOpen },
   { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/account', label: 'Account', icon: UserCog },
 ];
 
 const managerLinks = [
@@ -38,6 +40,7 @@ const managerLinks = [
   { to: '/manager/customers', label: 'Customers', icon: BookOpen },
   { to: '/manager/reports', label: 'Reports', icon: BarChart3 },
   { to: '/manager/settings', label: 'Settings', icon: Settings },
+  { to: '/manager/account', label: 'Account', icon: UserCog },
 ];
 
 const schedulerLinks = [
@@ -45,6 +48,7 @@ const schedulerLinks = [
   { to: '/scheduler/booking', label: 'Create Booking', icon: UserPlus },
   { to: '/scheduler/calendar', label: 'Calendar', icon: Calendar },
   { to: '/scheduler/customers', label: 'Customers', icon: BookOpen },
+  { to: '/scheduler/account', label: 'Account', icon: UserCog },
 ];
 
 const technicianLinks = [
@@ -52,6 +56,7 @@ const technicianLinks = [
   { to: '/technician/calendar', label: 'Calendar', icon: Calendar },
   { to: '/technician/route', label: 'Route Map', icon: MapPin },
   { to: '/technician/availability', label: 'Availability', icon: Clock },
+  { to: '/technician/account', label: 'Account', icon: UserCog },
 ];
 
 export function Sidebar() {

@@ -41,3 +41,11 @@ export async function getSchedulers() {
 export async function getManagers() {
   return getUsers('manager');
 }
+
+export async function deleteUser(id: string) {
+  const { error } = await supabase
+    .from('ss_users')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
