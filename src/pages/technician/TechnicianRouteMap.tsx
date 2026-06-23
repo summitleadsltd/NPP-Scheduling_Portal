@@ -11,7 +11,7 @@ import { StartRouteButton } from '@/components/shared/StartRouteButton';
 import type { Appointment } from '@/types/database';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { format, addDays, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 
 // Fix default marker icons in Leaflet
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
@@ -47,8 +47,12 @@ export function TechnicianRouteMap() {
     const load = async () => {
       try {
         const allAppointments = await getAppointments();
-        const dayStart = startOfDay(selectedDate);
-        const dayEnd = endOfDay(selectedDate);
+        
+        // Use timezone-aware date boundaries
+        const dayStart = new Date(selectedDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(selectedDate);
+        dayEnd.setHours(23, 59, 59, 999);
         
         const dayAppointments = allAppointments.filter((apt) => {
           const aptDate = new Date(apt.start_time);
@@ -89,8 +93,12 @@ export function TechnicianRouteMap() {
             const load = async () => {
               try {
                 const allAppointments = await getAppointments();
-                const dayStart = startOfDay(selectedDate);
-                const dayEnd = endOfDay(selectedDate);
+                
+                // Use timezone-aware date boundaries
+                const dayStart = new Date(selectedDate);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(selectedDate);
+                dayEnd.setHours(23, 59, 59, 999);
                 
                 const dayAppointments = allAppointments.filter((apt) => {
                   const aptDate = new Date(apt.start_time);
