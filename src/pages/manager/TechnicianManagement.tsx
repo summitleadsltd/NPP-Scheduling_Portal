@@ -50,7 +50,11 @@ export function TechnicianManagement() {
   const handleCreate = async () => {
     try {
       // Create auth user
-      const tempPassword = 'TempPass' + Math.random().toString(36).slice(2, 8) + '!';
+      const passwordChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const randomBytes = new Uint8Array(6);
+      window.crypto.getRandomValues(randomBytes);
+      const randomSuffix = Array.from(randomBytes, (byte) => passwordChars[byte % passwordChars.length]).join('');
+      const tempPassword = 'TempPass' + randomSuffix + '!';
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: form.email,
         password: tempPassword,

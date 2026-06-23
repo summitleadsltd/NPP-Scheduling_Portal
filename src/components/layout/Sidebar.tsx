@@ -24,7 +24,7 @@ const adminLinks = [
   { to: '/admin/users', label: 'User Management', icon: Users },
   { to: '/admin/booking', label: 'Create Booking', icon: UserPlus },
   { to: '/admin/dispatch', label: 'Dispatch Board', icon: Columns3 },
-  { to: '/admin/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/calendar', label: 'Team Calendar', icon: Calendar },
   { to: '/admin/customers', label: 'Customers', icon: BookOpen },
   { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
@@ -35,7 +35,7 @@ const managerLinks = [
   { to: '/manager/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/manager/booking', label: 'Create Booking', icon: UserPlus },
   { to: '/manager/dispatch', label: 'Dispatch Board', icon: Columns3 },
-  { to: '/manager/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/calendar', label: 'Team Calendar', icon: Calendar },
   { to: '/manager/technicians', label: 'Technicians', icon: Users },
   { to: '/manager/schedulers', label: 'Schedulers', icon: UserPlus },
   { to: '/manager/customers', label: 'Customers', icon: BookOpen },
@@ -47,14 +47,14 @@ const managerLinks = [
 const schedulerLinks = [
   { to: '/scheduler/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/scheduler/booking', label: 'Create Booking', icon: UserPlus },
-  { to: '/scheduler/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/calendar', label: 'Team Calendar', icon: Calendar },
   { to: '/scheduler/customers', label: 'Customers', icon: BookOpen },
   { to: '/scheduler/account', label: 'Account', icon: UserCog },
 ];
 
 const technicianLinks = [
   { to: '/technician/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/technician/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/calendar', label: 'Team Calendar', icon: Calendar },
   { to: '/technician/route', label: 'Route Map', icon: MapPin },
   { to: '/technician/availability', label: 'Availability', icon: Clock },
   { to: '/technician/account', label: 'Account', icon: UserCog },
@@ -76,8 +76,8 @@ export function Sidebar() {
   const navContent = (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b">
-        <img src="/npp-logo.jpg" alt="NPP Scheduling Portal" className="h-10 w-auto" />
-        <p className="text-xs text-muted-foreground mt-1 capitalize">{profile?.role} Portal</p>
+        <img src="/npp-logo.jpg" alt="New Paradigm Projects" className="h-10 w-auto" />
+        <p className="text-xs text-muted-foreground mt-1 capitalize">{profile?.role} Portal - NPP Scheduling Portal</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">

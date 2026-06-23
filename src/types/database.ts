@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'manager' | 'scheduler' | 'technician';
 
-export type AppointmentStatus = 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
 
 export type AppointmentType = 'installation' | 'repair' | 'maintenance' | 'inspection' | 'consultation';
 
@@ -50,6 +50,7 @@ export interface Appointment {
   created_by: string;
   created_at: string;
   updated_at: string;
+  call_recording_url?: string;
   // joined fields
   customer?: Customer;
   technician?: User;
@@ -63,11 +64,6 @@ export interface AvailabilityBlock {
   end_time: string;
   reason: string;
   created_at: string;
-}
-
-export interface FreeBusySlot {
-  start: string;
-  end: string;
 }
 
 export interface Notification {
@@ -111,4 +107,16 @@ export interface SchedulingSlot {
   travel_time_after: number;
   distance_before: number;
   distance_after: number;
+}
+
+export interface AppointmentActivityLog {
+  id: string;
+  appointment_id: string;
+  user_id: string;
+  user_name: string;
+  action_type: 'created' | 'updated' | 'rescheduled' | 'reassigned' | 'status_changed' | 'cancelled' | 'deleted';
+  old_value?: any;
+  new_value?: any;
+  field_changed?: string;
+  created_at: string;
 }

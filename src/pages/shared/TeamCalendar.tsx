@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
+import './TeamCalendar.css';
 import { getAppointments } from '@/services/appointmentService';
-import { getAllAvailabilityBlocks, getTechnicians } from '@/services/technicianService';
+import { getUsers } from '@/services/userService';
+import { getAvailabilityBlocks } from '@/services/availabilityService';
 import { supabase } from '@/lib/supabase';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -12,123 +14,72 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AppointmentStatusBadge } from '@/components/shared/AppointmentStatusBadge';
 import { formatEST } from '@/lib/timezone';
-import { addDays } from 'date-fns';
-import type { Appointment, User } from '@/types/database';
+import type { Appointment, User, AvailabilityBlock } from '@/types/database';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useMediaQuery } from '../../hooks/use-media-query';
 
-const statusColors: Record<string, string> = {
-  scheduled: '#3b82f6',
-  confirmed: '#8b5cf6',
-  in_progress: '#f59e0b',
-  completed: '#22c55e',
-  cancelled: '#ef4444',
-  no_show: '#6b7280',
+// Technician color palette - unique colors for each technician
+const technicianColors: Record<string, string> = {
+  default: '#3b82f6',
+  tech1: '#8b5cf6',
+  tech2: '#ec4899',
+  tech3: '#f59e0b',
+  tech4: '#10b981',
+  tech5: '#6366f1',
+  tech6: '#ef4444',
+  tech7: '#14b8a6',
+  tech8: '#f97316',
+  tech9: '#84cc16',
+  tech10: '#06b6d4',
 };
 
-const technicianColors = [
-  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
-];
+// Get a consistent color for a technician based on their index
+function getTechnicianColor(technicianIndex: number): string {
+  const colorKeys = Object.keys(technicianColors).filter(k => k !== 'default');
+  return technicianColors[colorKeys[technicianIndex % colorKeys.length]] || technicianColors.default;
+}
 
 export function TeamCalendar() {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [events, setEvents] = useState<EventInput[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [availabilityBlocks, setAvailabilityBlocks] = useState<AvailabilityBlock[]>([]);
   const [technicians, setTechnicians] = useState<User[]>([]);
-  const [selectedTechnicians, setSelectedTechnicians] = useState<string[]>([]);
-  const [isMobile, setIsMobile] = useState(false);
+  const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
+  const [technicianColorMap, setTechnicianColorMap] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+  const loadTechnicians = useCallback(async () => {
+    const data = await getUsers();
+    const techs = data.filter(u => u.role === 'technician' && u.active);
+    setTechnicians(techs);
+    
+    // Create color map for technicians
+    const colorMap: Record<string, string> = {};
+    techs.forEach((tech, index) => {
+      colorMap[tech.id] = getTechnicianColor(index);
+    });
+    setTechnicianColorMap(colorMap);
   }, []);
 
   const loadAppointments = useCallback(async () => {
-    // Load technicians
-    const techs = await getTechnicians();
-    setTechnicians(techs);
-
-    // Load all appointments
     const data = await getAppointments();
     setAppointments(data);
+  }, []);
 
-    // Load all availability blocks
-    const now = new Date();
-    const availabilityBlocks = await getAllAvailabilityBlocks(
-      now.toISOString(),
-      addDays(now, 30).toISOString()
-    );
-
-    // Filter appointments by selected technicians
-    const filteredAppointments = selectedTechnicians.length === 0
-      ? data
-      : data.filter((apt) => selectedTechnicians.includes(apt.technician_id));
-
-    // Map appointments to calendar events
-    const appointmentEvents: EventInput[] = filteredAppointments.map((apt) => {
-      const techIndex = techs.findIndex((t) => t.id === apt.technician_id);
-      const color = technicianColors[techIndex % technicianColors.length] || '#3b82f6';
-      
-      return {
-        id: apt.id,
-        title: `${apt.customer?.first_name} ${apt.customer?.last_name} - ${apt.technician?.name}`,
-        start: apt.start_time,
-        end: apt.end_time,
-        backgroundColor: statusColors[apt.status] || color,
-        borderColor: statusColors[apt.status] || color,
-        extendedProps: { type: 'appointment', technicianId: apt.technician_id },
-      };
-    });
-
-    // Filter availability blocks by selected technicians
-    const filteredAvailabilityBlocks = selectedTechnicians.length === 0
-      ? availabilityBlocks
-      : availabilityBlocks.filter((block) => selectedTechnicians.includes(block.technician_id));
-
-    // Map availability blocks to calendar events
-    const availabilityEvents: EventInput[] = filteredAvailabilityBlocks.map((block) => ({
-      id: `avail-${block.id}`,
-      title: 'Unavailable',
-      start: block.start_time,
-      end: block.end_time,
-      display: 'background',
-      color: '#ef4444',
-      extendedProps: { type: 'availability', technicianId: block.technician_id, technicianName: block.technician?.name, reason: block.reason },
-    }));
-
-    setEvents([...appointmentEvents, ...availabilityEvents]);
-  }, [selectedTechnicians]);
+  const loadAvailabilityBlocks = useCallback(async () => {
+    const data = await getAvailabilityBlocks();
+    setAvailabilityBlocks(data);
+  }, []);
 
   useEffect(() => {
+    loadTechnicians();
     loadAppointments();
-  }, [loadAppointments]);
 
-  // Set up realtime subscription for availability blocks
-  useEffect(() => {
-    const subscription = supabase
-      .channel('team-availability-blocks-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ss_availability_blocks',
-        },
-        () => {
-          loadAppointments();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [loadAppointments]);
-
-  // Set up realtime subscription for appointments
-  useEffect(() => {
-    const subscription = supabase
-      .channel('team-appointments-changes')
+    // Set up Realtime subscriptions
+    const appointmentsSubscription = supabase
+      .channel('appointments-channel')
       .on(
         'postgres_changes',
         {
@@ -142,79 +93,109 @@ export function TeamCalendar() {
       )
       .subscribe();
 
+    const availabilitySubscription = supabase
+      .channel('availability-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ss_availability_blocks',
+        },
+        () => {
+          loadAvailabilityBlocks();
+        }
+      )
+      .subscribe();
+
     return () => {
-      subscription.unsubscribe();
+      appointmentsSubscription.unsubscribe();
+      availabilitySubscription.unsubscribe();
     };
-  }, [loadAppointments]);
+    loadAvailabilityBlocks();
+  }, [loadTechnicians, loadAppointments, loadAvailabilityBlocks]);
+
+  useEffect(() => {
+    let filteredAppointments = appointments;
+    let filteredAvailability = availabilityBlocks;
+    
+    if (selectedTechnician !== 'all') {
+      filteredAppointments = appointments.filter(apt => apt.technician_id === selectedTechnician);
+      filteredAvailability = availabilityBlocks.filter(block => block.technician_id === selectedTechnician);
+    }
+
+    const appointmentEvents = filteredAppointments.map((apt) => ({
+      id: apt.id,
+      title: `${apt.customer?.first_name} ${apt.customer?.last_name} - ${apt.technician?.name}`,
+      start: apt.start_time,
+      end: apt.end_time,
+      backgroundColor: technicianColorMap[apt.technician_id] || technicianColors.default,
+      borderColor: technicianColorMap[apt.technician_id] || technicianColors.default,
+    }));
+
+    const availabilityEvents = filteredAvailability.map((block) => {
+      const tech = technicians.find(t => t.id === block.technician_id);
+      return {
+        id: `availability-${block.id}`,
+        title: `Unavailable - ${tech?.name || 'Unknown'}`,
+        start: block.start_time,
+        end: block.end_time,
+        backgroundColor: '#ef4444',
+        borderColor: '#ef4444',
+        editable: false,
+      };
+    });
+
+    setEvents([...appointmentEvents, ...availabilityEvents]);
+  }, [appointments, availabilityBlocks, selectedTechnician, technicianColorMap, technicians]);
 
   const handleEventClick = (info: EventClickArg) => {
     const apt = appointments.find((a) => a.id === info.event.id);
     if (apt) setSelectedAppointment(apt);
   };
 
-  const handleTechnicianToggle = (techId: string) => {
-    setSelectedTechnicians((prev) => {
-      if (prev.includes(techId)) {
-        return prev.filter((id) => id !== techId);
-      }
-      return [...prev, techId];
-    });
-  };
-
-  const handleSelectAll = () => {
-    setSelectedTechnicians(technicians.map((t) => t.id));
-  };
-
-  const handleClearAll = () => {
-    setSelectedTechnicians([]);
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Team Calendar</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={handleSelectAll}
-            className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80"
-          >
-            Select All
-          </button>
-          <button
-            onClick={handleClearAll}
-            className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80"
-          >
-            Clear All
-          </button>
-        </div>
+        <Select value={selectedTechnician} onValueChange={setSelectedTechnician}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All Technicians" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Technicians</SelectItem>
+            {technicians.map((tech) => (
+              <SelectItem key={tech.id} value={tech.id}>
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="technician-color-dot"
+                    style={{ '--tech-color': technicianColorMap[tech.id] } as React.CSSProperties}
+                  />
+                  {tech.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {technicians.map((tech) => {
-          const techIndex = technicians.findIndex((t) => t.id === tech.id);
-          const color = technicianColors[techIndex % technicianColors.length] || '#3b82f6';
-          const isSelected = selectedTechnicians.includes(tech.id);
-          
-          return (
-            <button
-              key={tech.id}
-              onClick={() => handleTechnicianToggle(tech.id)}
-              className={`px-3 py-1 text-sm rounded border-2 transition-colors ${
-                isSelected
-                  ? 'border-primary bg-primary/10'
-                  : 'border-transparent bg-secondary hover:bg-secondary/80'
-              }`}
-              style={{ '--tech-color': color } as React.CSSProperties}
-            >
-              <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: 'var(--tech-color)' } as React.CSSProperties} />
+      {/* Technician Color Legend */}
+      {selectedTechnician === 'all' && (
+        <div className="flex flex-wrap gap-2">
+          {technicians.map((tech) => (
+            <Badge key={tech.id} variant="outline" className="gap-2">
+              <div 
+                className="technician-color-dot"
+                style={{ '--tech-color': technicianColorMap[tech.id] } as React.CSSProperties}
+              />
               {tech.name}
-            </button>
-          );
-        })}
-      </div>
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <Card>
-        <CardContent className="p-4">
+        <CardContent className={isMobile ? "p-2" : "p-4"}>
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
             initialView={isMobile ? 'listWeek' : 'timeGridWeek'}
@@ -226,13 +207,13 @@ export function TeamCalendar() {
             events={events}
             eventClick={handleEventClick}
             slotMinTime="09:00:00"
-            slotMaxTime="19:00:00"
+            slotMaxTime="17:00:00"
             allDaySlot={false}
             hiddenDays={[0, 6]}
-            businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '19:00' }}
+            businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '17:00' }}
             height="auto"
-            eventMinHeight={isMobile ? 60 : 30}
-            dayHeaderFormat={isMobile ? { weekday: 'short' } : { weekday: 'short', month: 'numeric', day: 'numeric' }}
+            slotLabelInterval={isMobile ? { hours: 2 } : { hours: 1 }}
+            eventMinHeight={isMobile ? 30 : 20}
           />
         </CardContent>
       </Card>
@@ -274,7 +255,16 @@ export function TeamCalendar() {
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">Address</p>
                   <p className="font-medium">{selectedAppointment.address?.address_line}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedAppointment.address?.city}, {selectedAppointment.address?.state} {selectedAppointment.address?.zip_code}
+                  </p>
                 </div>
+                {selectedAppointment.notes && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Notes</p>
+                    <p className="font-medium">{selectedAppointment.notes}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

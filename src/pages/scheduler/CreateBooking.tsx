@@ -21,31 +21,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatEST } from '@/lib/timezone';
-import { Star, MapPin, Clock, Search, CheckCircle, ArrowRight, ArrowLeft, User, FileText } from 'lucide-react';
+import { Star, MapPin, Clock, Search, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import type { SchedulingSlot, Customer, Address } from '@/types/database';
 import { toast } from 'sonner';
 
 const addressSchema = z.object({
   address: z.string().min(1, 'Required'),
-  zip_code: z.string().min(5, 'ZIP code must be at least 5 characters'),
+  duration: z.number().min(15).max(480),
+  appointment_type: z.string().min(1, 'Required'),
 });
 
-const customerInfoSchema = z.object({
+const customerSchema = z.object({
   first_name: z.string().min(1, 'Required'),
   last_name: z.string().min(1, 'Required'),
   phone: z.string().min(1, 'Required'),
   email: z.string().email('Invalid email'),
-  appointment_type: z.string().min(1, 'Required'),
-  duration: z.number().min(15).max(480),
   notes: z.string().optional(),
 });
 
 type AddressForm = z.infer<typeof addressSchema>;
-type CustomerInfoForm = z.infer<typeof customerInfoSchema>;
+type CustomerForm = z.infer<typeof customerSchema>;
 
 export function CreateBooking() {
   const { profile } = useAuthStore();
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+  const [step, setStep] = useState<'address' | 'slots' | 'customer' | 'confirmed'>('address');
   const [slots, setSlots] = useState<SchedulingSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<SchedulingSlot | null>(null);
   const [searching, setSearching] = useState(false);
@@ -53,15 +52,16 @@ export function CreateBooking() {
   const [searchResults, setSearchResults] = useState<(Customer & { addresses: Address[] })[]>([]);
   const [geocodedAddress, setGeocodedAddress] = useState<{ lat: number; lng: number; display: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [existingCustomer, setExistingCustomer] = useState<Customer | null>(null);
+  const [addressData, setAddressData] = useState<AddressForm | null>(null);
 
   const {
     register: registerAddress,
     handleSubmit: handleSubmitAddress,
-    getValues: getAddressValues,
+    setValue: setAddressValue,
     formState: { errors: addressErrors },
   } = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
+    defaultValues: { duration: 60, appointment_type: 'installation' },
   });
 
   const {
@@ -70,10 +70,36 @@ export function CreateBooking() {
     setValue: setCustomerValue,
     getValues: getCustomerValues,
     formState: { errors: customerErrors },
-  } = useForm<CustomerInfoForm>({
-    resolver: zodResolver(customerInfoSchema),
-    defaultValues: { duration: 60 },
+  } = useForm<CustomerForm>({
+    resolver: zodResolver(customerSchema),
   });
+
+  const handleAddressSubmit = async (data: AddressForm) => {
+    setSearching(true);
+    try {
+      // Geocode address
+      const geo = await geocodeAddress(data.address);
+      if (!geo) {
+        toast.error('Could not geocode address. Please check and try again.');
+        return;
+      }
+      setGeocodedAddress({ lat: geo.latitude, lng: geo.longitude, display: geo.display_name });
+      setAddressData(data);
+
+      // Find best slots
+      const bestSlots = await findBestSlots(geo.latitude, geo.longitude, data.duration);
+      if (bestSlots.length === 0) {
+        toast.error('No available slots found. Try adjusting the duration or check back later.');
+        return;
+      }
+      setSlots(bestSlots);
+      setStep('slots');
+    } catch {
+      toast.error('Failed to find available slots');
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleCustomerSearch = async () => {
     if (customerSearch.length < 2) return;
@@ -91,91 +117,33 @@ export function CreateBooking() {
     setCustomerValue('last_name', customer.last_name);
     setCustomerValue('phone', customer.phone);
     setCustomerValue('email', customer.email);
-    setExistingCustomer(customer);
     setSearchResults([]);
     setCustomerSearch('');
   };
 
-  // Step 1: Address only
-  const handleAddressSubmit = async (data: AddressForm) => {
-    setSearching(true);
-    try {
-      const fullAddress = `${data.address}, ${data.zip_code}`;
-      const geo = await geocodeAddress(fullAddress);
-      if (!geo) {
-        toast.error('Could not geocode address. Please check and try again.');
-        return;
-      }
-      setGeocodedAddress({ lat: geo.latitude, lng: geo.longitude, display: geo.display_name });
-      setStep(2);
-    } catch {
-      toast.error('Failed to geocode address');
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // Step 2: Find best slots (default 60 min duration)
-  const findSlots = async () => {
-    if (!geocodedAddress) return;
-    setSearching(true);
-    try {
-      const bestSlots = await findBestSlots(geocodedAddress.lat, geocodedAddress.lng, 60);
-      if (bestSlots.length === 0) {
-        toast.error('No available slots found. Try adjusting the duration or check back later.');
-        return;
-      }
-      setSlots(bestSlots);
-      setStep(3);
-    } catch {
-      toast.error('Failed to find available slots');
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // Step 3: Select slot
-  const selectSlot = (slot: SchedulingSlot) => {
-    setSelectedSlot(slot);
-    setStep(4);
-  };
-
-  // Step 4: Customer info
-  const handleCustomerSubmit = async () => {
-    setStep(5);
-  };
-
-  // Step 5: Confirm and create
   const confirmBooking = async () => {
-    if (!selectedSlot || !profile || !geocodedAddress) return;
+    if (!selectedSlot || !profile || !geocodedAddress || !addressData) return;
     setSubmitting(true);
 
     try {
       const customerData = getCustomerValues();
-      const addressData = getAddressValues();
 
-      // Create or use existing customer
-      let customer;
-      if (existingCustomer) {
-        customer = existingCustomer;
-      } else {
-        customer = await createCustomer({
-          first_name: customerData.first_name,
-          last_name: customerData.last_name,
-          phone: customerData.phone,
-          email: customerData.email,
-        });
-      }
+      // Create or find customer
+      const customer = await createCustomer({
+        first_name: customerData.first_name,
+        last_name: customerData.last_name,
+        phone: customerData.phone,
+        email: customerData.email,
+      });
 
       // Create address
-      const fullAddress = `${addressData.address}, ${addressData.zip_code}`;
-      const addressParts = fullAddress.split(',').map((p) => p.trim());
+      const addressParts = addressData.address.split(',').map((p) => p.trim());
       const address = await createAddress({
         customer_id: customer.id,
-        address_line: addressParts[0] || fullAddress,
+        address_line: addressParts[0] || addressData.address,
         city: addressParts[1] || '',
         state: addressParts[2]?.split(' ')[0] || '',
-        zip_code: addressData.zip_code,
+        zip_code: addressParts[2]?.split(' ')[1] || '',
         latitude: geocodedAddress.lat,
         longitude: geocodedAddress.lng,
       });
@@ -187,10 +155,10 @@ export function CreateBooking() {
         address_id: address.id,
         start_time: selectedSlot.start_time,
         end_time: selectedSlot.end_time,
-        appointment_type: customerData.appointment_type,
+        appointment_type: addressData.appointment_type,
         notes: customerData.notes || '',
         created_by: profile.id,
-      }, { id: profile.id, name: profile.name });
+      });
 
       // Send notification
       await notifyNewAppointment(
@@ -201,7 +169,7 @@ export function CreateBooking() {
       );
 
       toast.success('Appointment booked successfully!');
-      setStep(6);
+      setStep('confirmed');
     } catch {
       toast.error('Failed to create booking');
     } finally {
@@ -210,87 +178,14 @@ export function CreateBooking() {
   };
 
   const resetForm = () => {
-    setStep(1);
+    setStep('address');
     setSlots([]);
     setSelectedSlot(null);
     setGeocodedAddress(null);
-    setExistingCustomer(null);
-    setSearchResults([]);
+    setAddressData(null);
   };
 
-  const goBack = () => {
-    if (step > 1) setStep((step - 1) as 1 | 2 | 3 | 4 | 5);
-  };
-
-  // Step 5: Review and confirm
-  if (step === 5 && selectedSlot) {
-    const customerData = getCustomerValues();
-    const addressData = getAddressValues();
-    return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Review Booking</h1>
-          <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Appointment Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Date & Time</p>
-                <p className="font-medium">
-                  {formatEST(selectedSlot.start_time, 'EEE, MMM d, yyyy at h:mm a')}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Technician</p>
-                <p className="font-medium">{selectedSlot.technician_name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Service Type</p>
-                <p className="font-medium capitalize">{customerData.appointment_type}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Duration</p>
-                <p className="font-medium">{customerData.duration} minutes</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Customer</p>
-              <p className="font-medium">
-                {customerData.first_name} {customerData.last_name}
-              </p>
-              <p className="text-sm text-muted-foreground">{customerData.phone}</p>
-              <p className="text-sm text-muted-foreground">{customerData.email}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Service Address</p>
-              <p className="font-medium">{addressData.address}, {addressData.zip_code}</p>
-            </div>
-            {customerData.notes && (
-              <div>
-                <p className="text-sm text-muted-foreground">Notes</p>
-                <p className="text-sm">{customerData.notes}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Button size="lg" onClick={confirmBooking} disabled={submitting} className="w-full">
-          {submitting ? 'Creating Booking...' : 'Confirm Booking'}
-        </Button>
-      </div>
-    );
-  }
-
-  // Step 6: Confirmed
-  if (step === 6 && selectedSlot) {
+  if (step === 'confirmed') {
     return (
       <div className="max-w-lg mx-auto mt-12 text-center space-y-4">
         <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto">
@@ -298,22 +193,80 @@ export function CreateBooking() {
         </div>
         <h2 className="text-2xl font-bold">Booking Confirmed!</h2>
         <p className="text-muted-foreground">
-          Appointment has been scheduled with {selectedSlot.technician_name} on{' '}
-          {formatEST(selectedSlot.start_time, 'EEEE, MMM d, yyyy at h:mm a')}
+          Appointment has been scheduled with {selectedSlot?.technician_name} on{' '}
+          {selectedSlot && formatEST(selectedSlot.start_time, 'EEEE, MMM d, yyyy at h:mm a')}
         </p>
         <Button onClick={resetForm}>Create Another Booking</Button>
       </div>
     );
   }
 
-  // Step 3: Select slot
-  if (step === 3) {
+  if (step === 'address') {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold">Create Booking</h1>
+        <p className="text-muted-foreground">Enter the service address first to find available appointment slots.</p>
+
+        <form onSubmit={handleSubmitAddress(handleAddressSubmit)}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Service Address & Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Service Address</Label>
+                <Input
+                  {...registerAddress('address')}
+                  placeholder="123 Main St, City, State ZIP"
+                />
+                {addressErrors.address && <p className="text-xs text-destructive">{addressErrors.address.message}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Appointment Type</Label>
+                  <Select onValueChange={(v: unknown) => setAddressValue('appointment_type', v as string)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="installation">Installation</SelectItem>
+                      <SelectItem value="repair">Repair</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                      <SelectItem value="inspection">Inspection</SelectItem>
+                      <SelectItem value="consultation">Consultation</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {addressErrors.appointment_type && <p className="text-xs text-destructive">{addressErrors.appointment_type.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Duration (minutes)</Label>
+                  <Input
+                    type="number"
+                    {...registerAddress('duration', { valueAsNumber: true })}
+                  />
+                  {addressErrors.duration && <p className="text-xs text-destructive">{addressErrors.duration.message}</p>}
+                </div>
+              </div>
+
+              <Button type="submit" size="lg" className="w-full" disabled={searching}>
+                {searching ? 'Finding Available Slots...' : 'Find Available Slots'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </form>
+      </div>
+    );
+  }
+
+  if (step === 'slots') {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Select Appointment Slot</h1>
-          <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={() => setStep('address')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
         </div>
@@ -331,8 +284,10 @@ export function CreateBooking() {
           {slots.map((slot, index) => (
             <Card
               key={index}
-              className="cursor-pointer transition-all hover:shadow-md"
-              onClick={() => selectSlot(slot)}
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                selectedSlot === slot ? 'ring-2 ring-primary' : ''
+              }`}
+              onClick={() => setSelectedSlot(slot)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -368,29 +323,53 @@ export function CreateBooking() {
             </Card>
           ))}
         </div>
+
+        {selectedSlot && (
+          <div className="flex justify-end">
+            <Button size="lg" onClick={() => setStep('customer')}>
+              Continue to Customer Details
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
 
-  // Step 4: Customer info
-  if (step === 4) {
+  if (step === 'customer') {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Customer Information</h1>
-          <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+          <Button variant="outline" onClick={() => setStep('slots')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Slots
           </Button>
         </div>
+
+        {/* Selected Slot Summary */}
+        {selectedSlot && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">{selectedSlot.technician_name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatEST(selectedSlot.start_time, 'EEE, MMM d, h:mm a')}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setStep('slots')}>
+                  Change
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Customer Search */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Search Existing Customer
-            </CardTitle>
+            <CardTitle className="text-lg">Search Existing Customer</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-2">
@@ -425,168 +404,50 @@ export function CreateBooking() {
           </CardContent>
         </Card>
 
-        <form onSubmit={handleSubmitCustomer(handleCustomerSubmit)}>
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Customer Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>First Name</Label>
-                    <Input {...registerCustomer('first_name')} />
-                    {customerErrors.first_name && <p className="text-xs text-destructive">{customerErrors.first_name.message}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Last Name</Label>
-                    <Input {...registerCustomer('last_name')} />
-                    {customerErrors.last_name && <p className="text-xs text-destructive">{customerErrors.last_name.message}</p>}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Phone</Label>
-                    <Input {...registerCustomer('phone')} />
-                    {customerErrors.phone && <p className="text-xs text-destructive">{customerErrors.phone.message}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" {...registerCustomer('email')} />
-                    {customerErrors.email && <p className="text-xs text-destructive">{customerErrors.email.message}</p>}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Service Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Appointment Type</Label>
-                    <Select onValueChange={(v: unknown) => setCustomerValue('appointment_type', v as string)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="installation">Installation</SelectItem>
-                        <SelectItem value="repair">Repair</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                        <SelectItem value="inspection">Inspection</SelectItem>
-                        <SelectItem value="consultation">Consultation</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {customerErrors.appointment_type && <p className="text-xs text-destructive">{customerErrors.appointment_type.message}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Duration (minutes)</Label>
-                    <Input
-                      type="number"
-                      {...registerCustomer('duration', { valueAsNumber: true })}
-                    />
-                    {customerErrors.duration && <p className="text-xs text-destructive">{customerErrors.duration.message}</p>}
-                  </div>
+        <form onSubmit={handleSubmitCustomer(confirmBooking)}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Customer Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input {...registerCustomer('first_name')} />
+                  {customerErrors.first_name && <p className="text-xs text-destructive">{customerErrors.first_name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Notes</Label>
-                  <Textarea {...registerCustomer('notes')} placeholder="Any special instructions..." />
+                  <Label>Last Name</Label>
+                  <Input {...registerCustomer('last_name')} />
+                  {customerErrors.last_name && <p className="text-xs text-destructive">{customerErrors.last_name.message}</p>}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input {...registerCustomer('phone')} />
+                  {customerErrors.phone && <p className="text-xs text-destructive">{customerErrors.phone.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" {...registerCustomer('email')} />
+                  {customerErrors.email && <p className="text-xs text-destructive">{customerErrors.email.message}</p>}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea {...registerCustomer('notes')} placeholder="Any special instructions..." />
+              </div>
 
-            <Button type="submit" size="lg" className="w-full">
-              Review Booking
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
+              <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+                {submitting ? 'Booking...' : 'Confirm Booking'}
+              </Button>
+            </CardContent>
+          </Card>
         </form>
       </div>
     );
   }
 
-  // Step 2: Find best slots
-  if (step === 2) {
-    return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Find Available Slots</h1>
-          <Button variant="outline" onClick={goBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </div>
-
-        {geocodedAddress && (
-          <Card>
-            <CardContent className="p-4 flex items-center gap-2 text-sm">
-              <MapPin className="h-4 w-4 text-primary" />
-              <span>{geocodedAddress.display}</span>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Find Best Available Slots</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              We'll calculate the best available slots based on technician availability, travel time, and distance.
-            </p>
-            <Button onClick={findSlots} size="lg" className="w-full" disabled={searching}>
-              {searching ? 'Finding Best Slots...' : 'Find Best Available Slots'}
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Step 1: Address only
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Create Booking</h1>
-      <p className="text-muted-foreground">Step 1 of 5: Enter service address</p>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Service Address
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmitAddress(handleAddressSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Street Address</Label>
-              <Input
-                {...registerAddress('address')}
-                placeholder="123 Main Street"
-              />
-              {addressErrors.address && <p className="text-xs text-destructive">{addressErrors.address.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>ZIP Code</Label>
-              <Input
-                {...registerAddress('zip_code')}
-                placeholder="12345"
-              />
-              {addressErrors.zip_code && <p className="text-xs text-destructive">{addressErrors.zip_code.message}</p>}
-            </div>
-            <Button type="submit" size="lg" className="w-full" disabled={searching}>
-              {searching ? 'Geocoding...' : 'Continue'}
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return null;
 }

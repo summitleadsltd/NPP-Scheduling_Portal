@@ -1,6 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import { formatEST } from '@/lib/timezone';
-import { notifyAvailabilityBlockCreated, notifyAvailabilityBlockDeleted } from './notificationService';
 import type { User, AvailabilityBlock } from '@/types/database';
 
 export async function getTechnicians() {
@@ -98,58 +96,16 @@ export async function createAvailabilityBlock(block: {
   const { data, error } = await supabase
     .from('ss_availability_blocks')
     .insert(block)
-    .select('*, technician:ss_users(*)')
+    .select()
     .single();
   if (error) throw error;
-
-  const blockData = data as AvailabilityBlock & { technician: User };
-
-  // Notify all technicians and managers
-  await notifyAvailabilityBlockCreated(
-    blockData.technician?.name || 'Unknown',
-    formatEST(blockData.start_time, 'MMM d, h:mm a'),
-    formatEST(blockData.end_time, 'h:mm a'),
-    blockData.reason
-  );
-
   return data as AvailabilityBlock;
 }
 
 export async function deleteAvailabilityBlock(id: string) {
-  // Get block details before deletion for notification
-  const { data: block } = await supabase
-    .from('ss_availability_blocks')
-    .select('*, technician:ss_users(*)')
-    .eq('id', id)
-    .single();
-
   const { error } = await supabase
     .from('ss_availability_blocks')
     .delete()
     .eq('id', id);
   if (error) throw error;
-
-  // Notify all technicians and managers
-  if (block) {
-    const blockData = block as AvailabilityBlock & { technician: User };
-    await notifyAvailabilityBlockDeleted(
-      blockData.technician?.name || 'Unknown',
-      formatEST(blockData.start_time, 'MMM d, h:mm a'),
-      formatEST(blockData.end_time, 'h:mm a')
-    );
-  }
-}
-
-export async function getAllAvailabilityBlocks(startDate?: string, endDate?: string) {
-  let query = supabase
-    .from('ss_availability_blocks')
-    .select('*, technician:ss_users(*)')
-    .order('start_time');
-
-  if (startDate) query = query.gte('start_time', startDate);
-  if (endDate) query = query.lte('end_time', endDate);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as (AvailabilityBlock & { technician: User })[];
 }

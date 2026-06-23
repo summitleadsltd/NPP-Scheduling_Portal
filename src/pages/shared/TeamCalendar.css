@@ -1,0 +1,6 @@
+.technician-color-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background-color: var(--tech-color, #3b82f6);
+}

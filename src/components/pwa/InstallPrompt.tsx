@@ -1,8 +1,8 @@
 import { usePWAStore, isIOSBannerDismissed } from '@/stores/pwaStore';
-import { isIOS, isPWAInstalled, isFirefoxOnIOS } from '@/lib/device';
+import { isIOS, isPWAInstalled, isFirefox } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Download, Share, X, AlertCircle } from 'lucide-react';
+import { Download, Share, X, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
 export function InstallPrompt() {
@@ -11,42 +11,8 @@ export function InstallPrompt() {
 
   if (isPWAInstalled()) return null;
 
-  // Firefox on iOS doesn't support PWA installation - show Safari recommendation
-  if (isFirefoxOnIOS() && !iosDismissed) {
-    return (
-      <Card className="fixed bottom-20 left-4 right-4 z-50 border-orange-500/20 shadow-lg md:left-auto md:right-4 md:w-80">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Use Safari to Install</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                To install NPP Scheduling Portal:
-              </p>
-              <ol className="text-xs text-muted-foreground mt-1 list-decimal list-inside space-y-1">
-                <li>Open in Safari</li>
-                <li>Tap Share</li>
-                <li>Tap Add to Home Screen</li>
-              </ol>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0"
-              onClick={() => {
-                dismissInstall();
-                setIosDismissed(true);
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   if (isIOS() && !iosDismissed) {
+    const isFirefoxOnIOS = isFirefox();
     return (
       <Card className="fixed bottom-20 left-4 right-4 z-50 border-primary/20 shadow-lg md:left-auto md:right-4 md:w-80">
         <CardContent className="p-4">
@@ -54,9 +20,15 @@ export function InstallPrompt() {
             <Share className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium">Install NPP</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Tap Share <Share className="h-3 w-3 inline" /> then "Add to Home Screen"
-              </p>
+              {isFirefoxOnIOS ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Open in Safari to install. Tap <ExternalLink className="h-3 w-3 inline" /> then "Add to Home Screen"
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tap Share <Share className="h-3 w-3 inline" /> then "Add to Home Screen"
+                </p>
+              )}
             </div>
             <Button
               variant="ghost"
