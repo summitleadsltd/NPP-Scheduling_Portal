@@ -204,9 +204,9 @@ export function TeamCalendar() {
                   ? 'border-primary bg-primary/10'
                   : 'border-transparent bg-secondary hover:bg-secondary/80'
               }`}
-              style={{ borderColor: isSelected ? color : undefined }}
+              style={{ '--tech-color': color } as React.CSSProperties}
             >
-              <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: color }} />
+              <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: 'var(--tech-color)' } as React.CSSProperties} />
               {tech.name}
             </button>
           );

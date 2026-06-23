@@ -445,9 +445,9 @@ export function ManagerCalendar() {
                       ? 'border-primary bg-primary/10'
                       : 'border-transparent bg-secondary hover:bg-secondary/80'
                   }`}
-                  style={{ borderColor: isSelected ? color : undefined }}
+                  style={{ '--tech-color': color } as React.CSSProperties}
                 >
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--tech-color)' } as React.CSSProperties} />
                   {tech.name}
                 </button>
               );
