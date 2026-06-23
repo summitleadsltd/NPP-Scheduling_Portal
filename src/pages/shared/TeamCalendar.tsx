@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import './TeamCalendar.css';
-import { getAppointments } from '@/services/appointmentService';
+import { getAppointments, updateAppointment, deleteAppointment, updateAppointmentStatus } from '@/services/appointmentService';
 import { getUsers } from '@/services/userService';
 import { getAvailabilityBlocks } from '@/services/availabilityService';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -14,10 +15,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AppointmentStatusBadge } from '@/components/shared/AppointmentStatusBadge';
 import { formatEST } from '@/lib/timezone';
-import type { Appointment, User, AvailabilityBlock } from '@/types/database';
+import type { Appointment, User, AvailabilityBlock, AppointmentStatus, AppointmentType } from '@/types/database';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useMediaQuery } from '../../hooks/use-media-query';
+import { Pencil, Trash2, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Technician color palette - unique colors for each technician
 const technicianColors: Record<string, string> = {
@@ -41,6 +48,7 @@ function getTechnicianColor(technicianIndex: number): string {
 }
 
 export function TeamCalendar() {
+  const { profile } = useAuthStore();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [events, setEvents] = useState<EventInput[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -49,6 +57,15 @@ export function TeamCalendar() {
   const [technicians, setTechnicians] = useState<User[]>([]);
   const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
   const [technicianColorMap, setTechnicianColorMap] = useState<Record<string, string>>({});
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState({
+    appointment_type: '' as AppointmentType,
+    start_time: '',
+    end_time: '',
+    notes: '',
+    status: '' as AppointmentStatus,
+    technician_id: '',
+  });
 
   const loadTechnicians = useCallback(async () => {
     const data = await getUsers();
@@ -152,6 +169,56 @@ export function TeamCalendar() {
   const handleEventClick = (info: EventClickArg) => {
     const apt = appointments.find((a) => a.id === info.event.id);
     if (apt) setSelectedAppointment(apt);
+  };
+
+  const handleEdit = (apt: Appointment) => {
+    setEditForm({
+      appointment_type: apt.appointment_type,
+      start_time: apt.start_time,
+      end_time: apt.end_time,
+      notes: apt.notes || '',
+      status: apt.status,
+      technician_id: apt.technician_id,
+    });
+    setSelectedAppointment(apt);
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedAppointment || !profile) return;
+    try {
+      await updateAppointment(selectedAppointment.id, editForm);
+      toast.success('Appointment updated');
+      setShowEditDialog(false);
+      setSelectedAppointment(null);
+      loadAppointments();
+    } catch {
+      toast.error('Failed to update appointment');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this appointment?')) return;
+    try {
+      await deleteAppointment(id);
+      toast.success('Appointment deleted');
+      setSelectedAppointment(null);
+      loadAppointments();
+    } catch {
+      toast.error('Failed to delete appointment');
+    }
+  };
+
+  const handleStatusChange = async (status: AppointmentStatus) => {
+    if (!selectedAppointment) return;
+    try {
+      await updateAppointmentStatus(selectedAppointment.id, status);
+      toast.success('Status updated');
+      setSelectedAppointment(null);
+      loadAppointments();
+    } catch {
+      toast.error('Failed to update status');
+    }
   };
 
   return (
@@ -265,6 +332,79 @@ export function TeamCalendar() {
                     <p className="font-medium">{selectedAppointment.notes}</p>
                   </div>
                 )}
+              </div>
+              <div className="flex gap-2 pt-4 border-t">
+                <Button onClick={() => handleEdit(selectedAppointment)} variant="outline" size="sm">
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+                <Button onClick={() => handleDelete(selectedAppointment.id)} variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Update Status</p>
+                <Select onValueChange={(v) => handleStatusChange(v as AppointmentStatus)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Change status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="no_show">No Show</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Appointment</DialogTitle>
+          </DialogHeader>
+          {selectedAppointment && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Technician</Label>
+                <Select value={editForm.technician_id} onValueChange={(v) => setEditForm({...editForm, technician_id: v})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {technicians.map((tech) => (
+                      <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Start Time</Label>
+                <Input type="datetime-local" value={editForm.start_time.slice(0, 16)} onChange={(e) => setEditForm({...editForm, start_time: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>End Time</Label>
+                <Input type="datetime-local" value={editForm.end_time.slice(0, 16)} onChange={(e) => setEditForm({...editForm, end_time: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})} />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveEdit}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </Button>
+                <Button onClick={() => setShowEditDialog(false)} variant="outline">
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
               </div>
             </div>
           )}
