@@ -135,3 +135,77 @@ export async function notifyAvailabilityBlockDeleted(
     type: 'availability_block_deleted',
   });
 }
+
+export async function notifyAppointmentCreatedAll(
+  technicianName: string,
+  customerName: string,
+  startTime: string,
+  endTime: string,
+) {
+  const managementUsers = await getManagementUsers();
+  const allTechnicians = await getAllTechnicians();
+
+  const allUserIds = [...new Set([...managementUsers, ...allTechnicians])];
+
+  await notifyMultipleUsers({
+    user_ids: allUserIds,
+    title: 'New Appointment Scheduled',
+    body: `${customerName} scheduled with ${technicianName} from ${startTime} to ${endTime}`,
+    type: 'appointment_created',
+  });
+}
+
+export async function notifyAppointmentUpdatedAll(
+  technicianName: string,
+  customerName: string,
+  startTime: string,
+  endTime: string,
+) {
+  const managementUsers = await getManagementUsers();
+  const allTechnicians = await getAllTechnicians();
+
+  const allUserIds = [...new Set([...managementUsers, ...allTechnicians])];
+
+  await notifyMultipleUsers({
+    user_ids: allUserIds,
+    title: 'Appointment Updated',
+    body: `${customerName}'s appointment with ${technicianName} updated to ${startTime} - ${endTime}`,
+    type: 'appointment_updated',
+  });
+}
+
+export async function notifyAppointmentDeletedAll(
+  technicianName: string,
+  customerName: string,
+  startTime: string,
+) {
+  const managementUsers = await getManagementUsers();
+  const allTechnicians = await getAllTechnicians();
+
+  const allUserIds = [...new Set([...managementUsers, ...allTechnicians])];
+
+  await notifyMultipleUsers({
+    user_ids: allUserIds,
+    title: 'Appointment Cancelled',
+    body: `${customerName}'s appointment with ${technicianName} at ${startTime} has been cancelled`,
+    type: 'appointment_deleted',
+  });
+}
+
+export async function notifyAppointmentStatusChangedAll(
+  technicianName: string,
+  customerName: string,
+  status: string,
+) {
+  const managementUsers = await getManagementUsers();
+  const allTechnicians = await getAllTechnicians();
+
+  const allUserIds = [...new Set([...managementUsers, ...allTechnicians])];
+
+  await notifyMultipleUsers({
+    user_ids: allUserIds,
+    title: 'Appointment Status Changed',
+    body: `${customerName}'s appointment with ${technicianName} is now ${status}`,
+    type: 'appointment_status_changed',
+  });
+}

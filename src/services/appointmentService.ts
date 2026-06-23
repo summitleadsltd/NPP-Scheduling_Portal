@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import { toEST } from '@/lib/timezone';
+import { toEST, formatEST } from '@/lib/timezone';
 import { createAppointmentEvent, updateAppointmentEvent, deleteAppointmentEvent } from './googleCalendarService';
+import {
+  notifyAppointmentCreatedAll,
+  notifyAppointmentUpdatedAll,
+  notifyAppointmentDeletedAll,
+  notifyAppointmentStatusChangedAll,
+} from './notificationService';
 import type { Appointment, AppointmentStatus } from '@/types/database';
 
 export async function getAppointments(filters?: {
@@ -96,6 +102,14 @@ export async function createAppointment(appointment: {
     );
   }
 
+  // Notify all technicians and managers
+  await notifyAppointmentCreatedAll(
+    apt.technician?.name || 'Unknown',
+    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
+    formatEST(apt.start_time, 'MMM d, h:mm a'),
+    formatEST(apt.end_time, 'h:mm a')
+  );
+
   return apt;
 }
 
@@ -104,16 +118,29 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
     .from('ss_appointments')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select()
+    .select(`
+      *,
+      customer:ss_customers(*),
+      technician:ss_users!ss_appointments_technician_id_fkey(*)
+    `)
     .single();
   if (error) throw error;
+
+  const apt = data as Appointment;
 
   // If cancelled, delete the Google Calendar event
   if (status === 'cancelled') {
     await deleteAppointmentEvent(id);
   }
 
-  return data as Appointment;
+  // Notify all technicians and managers
+  await notifyAppointmentStatusChangedAll(
+    apt.technician?.name || 'Unknown',
+    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
+    status
+  );
+
+  return apt;
 }
 
 export async function rescheduleAppointment(id: string, start_time: string, end_time: string, technician_id?: string) {
@@ -137,10 +164,20 @@ export async function rescheduleAppointment(id: string, start_time: string, end_
     .single();
   if (error) throw error;
 
+  const apt = data as Appointment;
+
   // Update Google Calendar event
   await updateAppointmentEvent(id, { startTime: start_time, endTime: end_time });
 
-  return data as Appointment;
+  // Notify all technicians and managers
+  await notifyAppointmentUpdatedAll(
+    apt.technician?.name || 'Unknown',
+    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
+    formatEST(apt.start_time, 'MMM d, h:mm a'),
+    formatEST(apt.end_time, 'h:mm a')
+  );
+
+  return apt;
 }
 
 export async function updateAppointment(id: string, update: {
@@ -187,10 +224,31 @@ export async function updateAppointment(id: string, update: {
     });
   }
 
+  // Notify all technicians and managers if time changed
+  if (update.start_time || update.end_time) {
+    await notifyAppointmentUpdatedAll(
+      apt.technician?.name || 'Unknown',
+      `${apt.customer?.first_name} ${apt.customer?.last_name}`,
+      formatEST(apt.start_time, 'MMM d, h:mm a'),
+      formatEST(apt.end_time, 'h:mm a')
+    );
+  }
+
   return apt;
 }
 
 export async function deleteAppointment(id: string) {
+  // Get appointment details before deletion for notification
+  const { data: apt } = await supabase
+    .from('ss_appointments')
+    .select(`
+      *,
+      customer:ss_customers(*),
+      technician:ss_users!ss_appointments_technician_id_fkey(*)
+    `)
+    .eq('id', id)
+    .single();
+
   // Delete Google Calendar event first
   await deleteAppointmentEvent(id);
 
@@ -199,6 +257,15 @@ export async function deleteAppointment(id: string) {
     .delete()
     .eq('id', id);
   if (error) throw error;
+
+  // Notify all technicians and managers
+  if (apt) {
+    await notifyAppointmentDeletedAll(
+      apt.technician?.name || 'Unknown',
+      `${apt.customer?.first_name} ${apt.customer?.last_name}`,
+      formatEST(apt.start_time, 'MMM d, h:mm a')
+    );
+  }
 }
 
 export async function getTodayAppointments(technicianId?: string) {
