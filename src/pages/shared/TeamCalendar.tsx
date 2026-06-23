@@ -4,6 +4,7 @@ import { getAppointments, updateAppointment, deleteAppointment, updateAppointmen
 import { getUsers } from '@/services/userService';
 import { getAvailabilityBlocks } from '@/services/availabilityService';
 import { getAppointmentActivityLog } from '@/services/activityLogService';
+import { uploadCallRecording, deleteCallRecording, updateAppointmentRecording } from '@/services/callRecordingService';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import FullCalendar from '@fullcalendar/react';
@@ -61,6 +62,7 @@ export function TeamCalendar() {
   const [technicianColorMap, setTechnicianColorMap] = useState<Record<string, string>>({});
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [uploadingRecording, setUploadingRecording] = useState(false);
   const [editForm, setEditForm] = useState({
     appointment_type: '' as AppointmentType,
     start_time: '',
@@ -232,6 +234,52 @@ export function TeamCalendar() {
     }
   };
 
+  const handleRecordingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedAppointment || !profile || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    
+    // Validate file type
+    const validTypes = ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/mp4'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type. Please upload MP3, WAV, AAC, or M4A files.');
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 50MB.');
+      return;
+    }
+
+    setUploadingRecording(true);
+    try {
+      const recordingUrl = await uploadCallRecording(file, selectedAppointment.id, profile.id);
+      await updateAppointmentRecording(selectedAppointment.id, recordingUrl);
+      toast.success('Call recording uploaded');
+      setSelectedAppointment({ ...selectedAppointment, call_recording_url: recordingUrl });
+      loadAppointments();
+    } catch {
+      toast.error('Failed to upload recording');
+    } finally {
+      setUploadingRecording(false);
+    }
+  };
+
+  const handleRecordingDelete = async () => {
+    if (!selectedAppointment?.call_recording_url) return;
+    if (!confirm('Are you sure you want to delete this call recording?')) return;
+    
+    try {
+      await deleteCallRecording(selectedAppointment.call_recording_url);
+      await updateAppointmentRecording(selectedAppointment.id, null);
+      toast.success('Call recording deleted');
+      setSelectedAppointment({ ...selectedAppointment, call_recording_url: null });
+      loadAppointments();
+    } catch {
+      toast.error('Failed to delete recording');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -396,6 +444,40 @@ export function TeamCalendar() {
                   </ScrollArea>
                 </div>
               )}
+
+              <div className="space-y-2 pt-4 border-t">
+                <p className="text-sm font-medium">Call Recording</p>
+                {selectedAppointment.call_recording_url ? (
+                  <div className="space-y-2">
+                    <audio controls className="w-full h-10">
+                      <source src={selectedAppointment.call_recording_url} type="audio/mpeg" />
+                      Your browser does not support the audio element.
+                    </audio>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleRecordingDelete}
+                      className="w-full"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Recording
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <Input
+                      type="file"
+                      accept=".mp3,.wav,.aac,.m4a"
+                      onChange={handleRecordingUpload}
+                      disabled={uploadingRecording}
+                      id="recording-upload"
+                    />
+                    <Label htmlFor="recording-upload" className="text-xs text-muted-foreground mt-1 block">
+                      Supported formats: MP3, WAV, AAC, M4A (max 50MB)
+                    </Label>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
