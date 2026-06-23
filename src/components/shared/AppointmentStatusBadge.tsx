@@ -3,7 +3,6 @@ import type { AppointmentStatus } from '@/types/database';
 
 const statusConfig: Record<AppointmentStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   scheduled: { label: 'Scheduled', variant: 'default' },
-  confirmed: { label: 'Confirmed', variant: 'default' },
   in_progress: { label: 'In Progress', variant: 'secondary' },
   completed: { label: 'Completed', variant: 'outline' },
   cancelled: { label: 'Cancelled', variant: 'destructive' },

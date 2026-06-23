@@ -1,65 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import { toEST, formatEST } from '@/lib/timezone';
-import { getAvailabilityBlocks } from './technicianService';
-import {
-  notifyAppointmentCreatedAll,
-  notifyAppointmentUpdatedAll,
-  notifyAppointmentDeletedAll,
-  notifyAppointmentStatusChangedAll,
-} from './notificationService';
-import { logAppointmentActivity } from './auditTrailService';
+import { toEST } from '@/lib/timezone';
+import { notifyAppointmentCancelled } from './notificationService';
 import type { Appointment, AppointmentStatus } from '@/types/database';
-
-// Check if a time slot is available for a technician
-export async function checkTechnicianAvailability(
-  technicianId: string,
-  startTime: string,
-  endTime: string
-): Promise<{ available: boolean; reason?: string }> {
-  // Check for existing appointments
-  const { data: existingAppointments } = await supabase
-    .from('ss_appointments')
-    .select('*')
-    .eq('technician_id', technicianId)
-    .neq('status', 'cancelled')
-    .or(`and(start_time.lt.${endTime},end_time.gt.${startTime})`);
-
-  if (existingAppointments && existingAppointments.length > 0) {
-    return { available: false, reason: 'Technician already has an appointment during this time' };
-  }
-
-  // Check for availability blocks
-  const availabilityBlocks = await getAvailabilityBlocks(technicianId);
-  const hasConflict = availabilityBlocks.some((block) => {
-    return (
-      (new Date(block.start_time) < new Date(endTime) &&
-       new Date(block.end_time) > new Date(startTime))
-    );
-  });
-
-  if (hasConflict) {
-    return { available: false, reason: 'Technician has marked this time as unavailable' };
-  }
-
-  // Check working hours (9 AM - 7 PM)
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  const startHour = start.getHours();
-  const endHour = end.getHours();
-  const dayOfWeek = start.getDay();
-
-  // Weekend check
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    return { available: false, reason: 'Appointments can only be scheduled on weekdays' };
-  }
-
-  // Business hours check
-  if (startHour < 9 || endHour > 19) {
-    return { available: false, reason: 'Appointments must be between 9 AM and 7 PM' };
-  }
-
-  return { available: true };
-}
 
 export async function getAppointments(filters?: {
   technician_id?: string;
@@ -119,18 +61,7 @@ export async function createAppointment(appointment: {
   appointment_type: string;
   notes?: string;
   created_by: string;
-}, user: { id: string; name: string }) {
-  // Check availability before creating appointment
-  const availabilityCheck = await checkTechnicianAvailability(
-    appointment.technician_id,
-    appointment.start_time,
-    appointment.end_time
-  );
-
-  if (!availabilityCheck.available) {
-    throw new Error(availabilityCheck.reason || 'Time slot is not available');
-  }
-
+}) {
   const { data, error } = await supabase
     .from('ss_appointments')
     .insert({ ...appointment, status: 'scheduled' })
@@ -143,85 +74,22 @@ export async function createAppointment(appointment: {
     .single();
   if (error) throw error;
 
-  const apt = data as Appointment;
-
-  // Log audit trail
-  await logAppointmentActivity({
-    appointment_id: apt.id,
-    user_id: user.id,
-    user_name: user.name,
-    action_type: 'created',
-    new_value: {
-      customer_id: apt.customer_id,
-      technician_id: apt.technician_id,
-      start_time: apt.start_time,
-      end_time: apt.end_time,
-      appointment_type: apt.appointment_type,
-      status: apt.status,
-    },
-  });
-
-  // Notify all technicians and managers
-  await notifyAppointmentCreatedAll(
-    apt.technician?.name || 'Unknown',
-    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
-    formatEST(apt.start_time, 'MMM d, h:mm a'),
-    formatEST(apt.end_time, 'h:mm a')
-  );
-
-  return apt;
+  return data as Appointment;
 }
 
-export async function updateAppointmentStatus(id: string, status: AppointmentStatus, user: { id: string; name: string }) {
-  // Get current appointment for audit trail
-  const { data: currentApt } = await supabase
-    .from('ss_appointments')
-    .select('status')
-    .eq('id', id)
-    .single();
-
+export async function updateAppointmentStatus(id: string, status: AppointmentStatus) {
   const { data, error } = await supabase
     .from('ss_appointments')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select(`
-      *,
-      customer:ss_customers(*),
-      technician:ss_users!ss_appointments_technician_id_fkey(*)
-    `)
+    .select()
     .single();
   if (error) throw error;
 
-  const apt = data as Appointment;
-
-  // Log audit trail
-  await logAppointmentActivity({
-    appointment_id: apt.id,
-    user_id: user.id,
-    user_name: user.name,
-    action_type: 'status_changed',
-    old_value: { status: currentApt?.status },
-    new_value: { status: apt.status },
-  });
-
-  // Notify all technicians and managers
-  await notifyAppointmentStatusChangedAll(
-    apt.technician?.name || 'Unknown',
-    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
-    status
-  );
-
-  return apt;
+  return data as Appointment;
 }
 
-export async function rescheduleAppointment(id: string, start_time: string, end_time: string, technician_id?: string, user?: { id: string; name: string }) {
-  // Get current appointment for audit trail
-  const { data: currentApt } = await supabase
-    .from('ss_appointments')
-    .select('start_time, end_time, technician_id')
-    .eq('id', id)
-    .single();
-
+export async function rescheduleAppointment(id: string, start_time: string, end_time: string, technician_id?: string) {
   const update: Record<string, string> = {
     start_time,
     end_time,
@@ -242,38 +110,7 @@ export async function rescheduleAppointment(id: string, start_time: string, end_
     .single();
   if (error) throw error;
 
-  const apt = data as Appointment;
-
-  // Log audit trail
-  if (user) {
-    const actionType = technician_id && technician_id !== currentApt?.technician_id ? 'reassigned' : 'rescheduled';
-    await logAppointmentActivity({
-      appointment_id: apt.id,
-      user_id: user.id,
-      user_name: user.name,
-      action_type: actionType,
-      old_value: {
-        start_time: currentApt?.start_time,
-        end_time: currentApt?.end_time,
-        technician_id: currentApt?.technician_id,
-      },
-      new_value: {
-        start_time: apt.start_time,
-        end_time: apt.end_time,
-        technician_id: apt.technician_id,
-      },
-    });
-  }
-
-  // Notify all technicians and managers
-  await notifyAppointmentUpdatedAll(
-    apt.technician?.name || 'Unknown',
-    `${apt.customer?.first_name} ${apt.customer?.last_name}`,
-    formatEST(apt.start_time, 'MMM d, h:mm a'),
-    formatEST(apt.end_time, 'h:mm a')
-  );
-
-  return apt;
+  return data as Appointment;
 }
 
 export async function updateAppointment(id: string, update: {
@@ -283,14 +120,7 @@ export async function updateAppointment(id: string, update: {
   notes?: string;
   status?: AppointmentStatus;
   technician_id?: string;
-}, user?: { id: string; name: string }) {
-  // Get current appointment for audit trail
-  const { data: currentApt } = await supabase
-    .from('ss_appointments')
-    .select('start_time, end_time, appointment_type, notes, status, technician_id')
-    .eq('id', id)
-    .single();
-
+}) {
   const { data, error } = await supabase
     .from('ss_appointments')
     .update({ ...update, updated_at: new Date().toISOString() })
@@ -304,49 +134,14 @@ export async function updateAppointment(id: string, update: {
     .single();
   if (error) throw error;
 
-  const apt = data as Appointment;
-
-  // Log audit trail
-  if (user) {
-    await logAppointmentActivity({
-      appointment_id: apt.id,
-      user_id: user.id,
-      user_name: user.name,
-      action_type: 'updated',
-      old_value: {
-        start_time: currentApt?.start_time,
-        end_time: currentApt?.end_time,
-        appointment_type: currentApt?.appointment_type,
-        notes: currentApt?.notes,
-        status: currentApt?.status,
-        technician_id: currentApt?.technician_id,
-      },
-      new_value: update,
-    });
-  }
-
-  // Notify all technicians and managers if time changed
-  if (update.start_time || update.end_time) {
-    await notifyAppointmentUpdatedAll(
-      apt.technician?.name || 'Unknown',
-      `${apt.customer?.first_name} ${apt.customer?.last_name}`,
-      formatEST(apt.start_time, 'MMM d, h:mm a'),
-      formatEST(apt.end_time, 'h:mm a')
-    );
-  }
-
-  return apt;
+  return data as Appointment;
 }
 
-export async function deleteAppointment(id: string, user?: { id: string; name: string }) {
-  // Get appointment details before deletion for notification and audit trail
+export async function deleteAppointment(id: string) {
+  // Get appointment details before deletion for notification
   const { data: apt } = await supabase
     .from('ss_appointments')
-    .select(`
-      *,
-      customer:ss_customers(*),
-      technician:ss_users!ss_appointments_technician_id_fkey(*)
-    `)
+    .select('*, customer:ss_customers(*), technician:ss_users(*)')
     .eq('id', id)
     .single();
 
@@ -356,30 +151,12 @@ export async function deleteAppointment(id: string, user?: { id: string; name: s
     .eq('id', id);
   if (error) throw error;
 
-  // Log audit trail
-  if (user && apt) {
-    await logAppointmentActivity({
-      appointment_id: apt.id,
-      user_id: user.id,
-      user_name: user.name,
-      action_type: 'deleted',
-      old_value: {
-        customer_id: apt.customer_id,
-        technician_id: apt.technician_id,
-        start_time: apt.start_time,
-        end_time: apt.end_time,
-        appointment_type: apt.appointment_type,
-        status: apt.status,
-      },
-    });
-  }
-
-  // Notify all technicians and managers
-  if (apt) {
-    await notifyAppointmentDeletedAll(
-      apt.technician?.name || 'Unknown',
-      `${apt.customer?.first_name} ${apt.customer?.last_name}`,
-      formatEST(apt.start_time, 'MMM d, h:mm a')
+  // Send cancellation notification
+  if (apt && apt.customer && apt.technician) {
+    await notifyAppointmentCancelled(
+      apt.technician_id,
+      `${apt.customer.first_name} ${apt.customer.last_name}`,
+      id,
     );
   }
 }

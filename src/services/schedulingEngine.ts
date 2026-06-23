@@ -1,13 +1,12 @@
 import { supabase } from '@/lib/supabase';
 import { getRoute } from './geocodingService';
-// import { getFreeBusy, getCalendarEvents, getValidAccessToken } from './googleCalendarService';
 import type { SchedulingSlot, Appointment, User } from '@/types/database';
 import { addMinutes, startOfDay, endOfDay, parseISO, isAfter, isBefore, format, addDays, getDay } from 'date-fns';
 import { toEST } from '@/lib/timezone';
 
 const DEFAULT_DURATION = 60; // minutes
 const BUSINESS_START_HOUR = 9;
-const BUSINESS_END_HOUR = 19; // 7 PM EST
+const BUSINESS_END_HOUR = 17;
 const SLOT_INCREMENT = 30; // minutes
 const DAYS_AHEAD = 14;
 const MAX_SLOTS = 10;
@@ -15,8 +14,7 @@ const MAX_SLOTS = 10;
 interface TechnicianCalendarData {
   technician: User;
   busySlots: { start: Date; end: Date }[];
-  events: Appointment[];
-  appointments: Appointment[]; // DB appointments for address data (travel calc)
+  appointments: Appointment[];
 }
 
 export async function findBestSlots(
@@ -24,7 +22,7 @@ export async function findBestSlots(
   customerLng: number,
   durationMinutes: number = DEFAULT_DURATION,
 ): Promise<SchedulingSlot[]> {
-  // 1. Get all active technicians with connected calendars
+  // 1. Get all active technicians
   const { data: technicians } = await supabase
     .from('ss_users')
     .select('*')
@@ -75,9 +73,8 @@ async function getTechnicianCalendarData(
 ): Promise<TechnicianCalendarData> {
   const timeMin = searchStart.toISOString();
   const timeMax = searchEnd.toISOString();
-  let busySlots: { start: Date; end: Date }[] = [];
 
-  // Get DB appointments only - Google Calendar integration removed
+  // Get DB appointments (have geocoded addresses for travel calc)
   const { data: appointments } = await supabase
     .from('ss_appointments')
     .select('*, address:ss_addresses(*)')
@@ -88,7 +85,7 @@ async function getTechnicianCalendarData(
     .order('start_time');
 
   // Use DB appointments as busy slots
-  busySlots = (appointments || []).map((apt: Appointment) => ({
+  const busySlots = (appointments || []).map((apt: Appointment) => ({
     start: new Date(apt.start_time),
     end: new Date(apt.end_time),
   }));
@@ -96,7 +93,6 @@ async function getTechnicianCalendarData(
   return {
     technician,
     busySlots,
-    events: appointments || [],
     appointments: (appointments || []) as Appointment[],
   };
 }

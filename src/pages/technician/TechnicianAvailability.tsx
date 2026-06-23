@@ -5,10 +5,6 @@ import {
   createAvailabilityBlock,
   deleteAvailabilityBlock,
 } from '@/services/technicianService';
-import {
-  notifyAvailabilityBlockCreated,
-  notifyAvailabilityBlockDeleted,
-} from '@/services/notificationService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +25,6 @@ import {
 } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatEST } from '@/lib/timezone';
-import { toast } from 'sonner';
 import type { AvailabilityBlock } from '@/types/database';
 
 export function TechnicianAvailability() {
@@ -61,50 +56,20 @@ export function TechnicianAvailability() {
 
   const handleCreate = async () => {
     if (!profile) return;
-    // Convert to EST timezone before saving
-    const startDate = new Date(`${form.start_date}T${form.start_time}`);
-    const endDate = new Date(`${form.end_date}T${form.end_time}`);
-    
-    // Format as EST ISO string
-    const estStartDate = startDate.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const estEndDate = endDate.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    
     await createAvailabilityBlock({
       technician_id: profile.id,
-      start_time: new Date(estStartDate).toISOString(),
-      end_time: new Date(estEndDate).toISOString(),
+      start_time: new Date(`${form.start_date}T${form.start_time}`).toISOString(),
+      end_time: new Date(`${form.end_date}T${form.end_time}`).toISOString(),
       reason: form.reason,
     });
-
-    // Notify all management users and technicians
-    await notifyAvailabilityBlockCreated(
-      profile.name,
-      formatEST(new Date(estStartDate), 'MMM d, yyyy h:mm a'),
-      formatEST(new Date(estEndDate), 'MMM d, yyyy h:mm a'),
-      form.reason
-    );
-
     setDialogOpen(false);
-    setForm({ start_date: '', start_time: '09:00', end_date: '', end_time: '19:00', reason: 'personal' });
+    setForm({ start_date: '', start_time: '09:00', end_date: '', end_time: '17:00', reason: 'personal' });
     loadBlocks();
-    toast.success('Availability block added and notifications sent');
   };
 
   const handleDelete = async (id: string) => {
-    const blockToDelete = blocks.find((b) => b.id === id);
-    if (!blockToDelete) return;
-
     await deleteAvailabilityBlock(id);
-
-    // Notify all management users and technicians
-    await notifyAvailabilityBlockDeleted(
-      profile.name,
-      formatEST(blockToDelete.start_time, 'MMM d, yyyy h:mm a'),
-      formatEST(blockToDelete.end_time, 'MMM d, yyyy h:mm a')
-    );
-
     loadBlocks();
-    toast.success('Availability block removed and notifications sent');
   };
 
   if (loading) {

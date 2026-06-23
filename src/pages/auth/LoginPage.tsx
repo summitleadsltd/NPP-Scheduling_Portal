@@ -56,7 +56,8 @@ export function LoginPage() {
           <div className="mx-auto mb-4">
             <img src="/npp-logo.jpg" alt="New Paradigm Projects" className="h-12 w-auto mx-auto" />
           </div>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl font-bold">NPP Scheduling Portal</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Intelligent Field Service Dispatch
           </p>
         </CardHeader>

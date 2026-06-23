@@ -4,18 +4,14 @@ export function isIOS(): boolean {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-export function isFirefox(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Firefox|FxiOS/.test(navigator.userAgent);
-}
-
-export function isFirefoxOnIOS(): boolean {
-  return isIOS() && isFirefox();
-}
-
 export function isAndroid(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Android/.test(navigator.userAgent);
+}
+
+export function isFirefox(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Firefox/i.test(navigator.userAgent);
 }
 
 export function isDesktop(): boolean {

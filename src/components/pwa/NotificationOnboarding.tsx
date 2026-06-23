@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-// import { requestNotificationPermission } from '@/lib/firebase';
+import { requestNotificationPermission } from '@/lib/firebase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Bell, X } from 'lucide-react';
@@ -25,7 +25,7 @@ export function NotificationOnboarding() {
   const handleEnable = async () => {
     if (!profile) return;
     setRequesting(true);
-    // await requestNotificationPermission(profile.id);
+    await requestNotificationPermission(profile.id);
     setRequesting(false);
     setShow(false);
   };
